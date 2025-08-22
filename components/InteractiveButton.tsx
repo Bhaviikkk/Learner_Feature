@@ -1,0 +1,185 @@
+"use client"
+
+import { useState } from "react"
+import {
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Typography,
+  CircularProgress,
+  Box,
+  Chip,
+  Stack,
+  Alert,
+} from "@mui/material"
+import { IconInfoCircle, IconBrain } from "@tabler/icons-react"
+
+interface InteractiveButtonProps {
+  element: string
+  context?: string
+  position?: "top" | "bottom" | "left" | "right"
+  apiKey?: string
+  language?: string
+}
+
+export default function InteractiveButton({
+  element,
+  context = "",
+  position = "right",
+  apiKey = "demo-key-123",
+  language = "en",
+}: InteractiveButtonProps) {
+  const [open, setOpen] = useState(false)
+  const [explanation, setExplanation] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [sources, setSources] = useState([])
+
+  const handleClick = async () => {
+    setOpen(true)
+    setLoading(true)
+    setError("")
+    setExplanation("")
+    setSources([])
+
+    try {
+      const response = await fetch("/api/explain", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          element,
+          context,
+          options: {
+            language,
+            tone: "friendly",
+            complexity: "intermediate",
+            includeExamples: true,
+            maxLength: 600,
+          },
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to get explanation")
+      }
+
+      setExplanation(data.data.explanation)
+      setSources(data.data.sources || [])
+    } catch (err) {
+      setError(err.message || "Failed to get AI explanation. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <Tooltip title="Get AI explanation" placement={position}>
+        <IconButton
+          onClick={handleClick}
+          size="small"
+          sx={{
+            bgcolor: "primary.main",
+            color: "white",
+            width: 24,
+            height: 24,
+            "&:hover": {
+              bgcolor: "primary.dark",
+            },
+            ml: 1,
+          }}
+        >
+          <IconInfoCircle size={16} />
+        </IconButton>
+      </Tooltip>
+
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <IconBrain size={24} />
+          AI Explanation: {element}
+        </DialogTitle>
+        <DialogContent>
+          {loading ? (
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", py: 4 }}>
+              <CircularProgress />
+              <Typography sx={{ ml: 2 }}>Generating explanation...</Typography>
+            </Box>
+          ) : error ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          ) : (
+            <Stack spacing={3}>
+              <Typography variant="body1" sx={{ lineHeight: 1.7 }}>
+                {explanation}
+              </Typography>
+
+              {context && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Context:
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                    {context}
+                  </Typography>
+                </Box>
+              )}
+
+              {sources.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Sources:
+                  </Typography>
+                  <Stack spacing={1}>
+                    {sources.map((source, index) => (
+                      <Box key={index}>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {source.title || `Source ${index + 1}`}
+                          </Typography>
+                          <Chip
+                            label={`${(source.relevanceScore * 100).toFixed(0)}% relevant`}
+                            size="small"
+                            color="primary"
+                          />
+                        </Stack>
+                        {source.url && (
+                          <Typography variant="caption" color="text.secondary">
+                            {source.url}
+                          </Typography>
+                        )}
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
+              <Box sx={{ bgcolor: "grey.50", p: 2, borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Generated by AI • Language: {language.toUpperCase()} • Powered by Gemini
+                </Typography>
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpen(false)}>Close</Button>
+          {!loading && !error && explanation && (
+            <Button onClick={handleClick} variant="outlined">
+              Regenerate
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+    </>
+  )
+}
